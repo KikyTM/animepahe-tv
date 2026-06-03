@@ -3,6 +3,7 @@ package com.animepahe.tv;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.os.Bundle;
+import android.os.Message;
 import android.view.KeyEvent;
 import android.view.View;
 import android.webkit.WebChromeClient;
@@ -17,7 +18,6 @@ public class MainActivity extends Activity {
     private WebView webView;
     private static final String URL = "https://animepahe.ch/";
 
-    // Daftar domain iklan yang diblokir
     private static final String[] AD_HOSTS = {
         "googlesyndication.com",
         "googleadservices.com",
@@ -72,6 +72,8 @@ public class MainActivity extends Activity {
         settings.setMediaPlaybackRequiresUserGesture(false);
         settings.setCacheMode(WebSettings.LOAD_DEFAULT);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        settings.setSupportMultipleWindows(false);
+        settings.setJavaScriptCanOpenWindowsAutomatically(false);
         settings.setUserAgentString(
             "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 " +
             "(KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
@@ -79,9 +81,28 @@ public class MainActivity extends Activity {
 
         webView.setWebViewClient(new WebViewClient() {
             @Override
-            public boolean shouldOverrideUrlLoading(WebView view, String url) {
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                String url = request.getUrl().toString();
                 view.loadUrl(url);
                 return true;
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                view.evaluateJavascript(
+                    "window.open = function(url) { location.href = url; };" +
+                    "document.addEventListener('click', function(e) {" +
+                    "  var el = e.target;" +
+                    "  while(el) {" +
+                    "    if(el.tagName === 'A' && el.target === '_blank') {" +
+                    "      el.target = '_self';" +
+                    "    }" +
+                    "    el = el.parentElement;" +
+                    "  }" +
+                    "}, true);",
+                    null
+                );
             }
 
             @Override
@@ -90,7 +111,6 @@ public class MainActivity extends Activity {
                 if (host != null) {
                     for (String adHost : AD_HOSTS) {
                         if (host.contains(adHost)) {
-                            // Blokir request iklan
                             return new WebResourceResponse("text/plain", "utf-8", null);
                         }
                     }
@@ -99,7 +119,18 @@ public class MainActivity extends Activity {
             }
         });
 
-        webView.setWebChromeClient(new WebChromeClient());
+        webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, Message resultMsg) {
+                WebView.HitTestResult result = view.getHitTestResult();
+                String url = result.getExtra();
+                if (url != null) {
+                    view.loadUrl(url);
+                }
+                return false;
+            }
+        });
+
         webView.loadUrl(URL);
     }
 
