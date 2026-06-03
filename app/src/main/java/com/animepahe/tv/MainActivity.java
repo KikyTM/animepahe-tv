@@ -17,6 +17,7 @@ public class MainActivity extends Activity {
 
     private WebView webView;
     private static final String URL = "https://animepahe.ch/";
+    private String lastUrl = URL;
 
     private static final String[] AD_HOSTS = {
         "googlesyndication.com",
@@ -83,20 +84,35 @@ public class MainActivity extends Activity {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 String url = request.getUrl().toString();
-                view.loadUrl(url);
+
+                // Hanya izinkan URL animepahe, blokir semua yang lain
+                if (url.contains("animepahe")) {
+                    lastUrl = url;
+                    return false;
+                }
+
+                // Blokir semua URL lain
                 return true;
             }
 
             @Override
             public void onPageFinished(WebView view, String url) {
                 super.onPageFinished(view, url);
+
+                // Inject JS untuk blokir popup & redirect
                 view.evaluateJavascript(
-                    "window.open = function(url) { location.href = url; };" +
+                    "window.open = function() { return null; };" +
+                    "window.alert = function() {};" +
+                    "window.confirm = function() { return false; };" +
                     "document.addEventListener('click', function(e) {" +
                     "  var el = e.target;" +
                     "  while(el) {" +
-                    "    if(el.tagName === 'A' && el.target === '_blank') {" +
+                    "    if(el.tagName === 'A') {" +
                     "      el.target = '_self';" +
+                    "      var href = el.getAttribute('href');" +
+                    "      if(href && href.indexOf('animepahe') === -1) {" +
+                    "        e.preventDefault();" +
+                    "      }" +
                     "    }" +
                     "    el = el.parentElement;" +
                     "  }" +
@@ -122,12 +138,7 @@ public class MainActivity extends Activity {
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture, Message resultMsg) {
-                WebView.HitTestResult result = view.getHitTestResult();
-                String url = result.getExtra();
-                if (url != null) {
-                    view.loadUrl(url);
-                }
-                return false;
+                return false; // Blokir semua popup window
             }
         });
 
